@@ -2,7 +2,7 @@
 
 import type { Task } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { ChevronRight, AlertTriangle, Sparkles, Play } from "lucide-react"
+import { ChevronRight, AlertTriangle, Sparkles, Play, Plus, Pencil } from "lucide-react"
 import { useMemo } from "react"
 
 interface TaskItemProps {
@@ -10,6 +10,8 @@ interface TaskItemProps {
   onToggle: (id: string) => void
   onSplit: (task: Task) => void
   onFocus: (task: Task) => void
+  onAdd: (task: Task) => void   // <--- NEW
+  onEdit: (task: Task) => void  // <--- NEW
 }
 
 function calculateChildrenSum(task: Task): number {
@@ -17,7 +19,7 @@ function calculateChildrenSum(task: Task): number {
   return task.children.reduce((sum, child) => sum + child.estimate, 0)
 }
 
-export function TaskItem({ task, onToggle, onSplit, onFocus }: TaskItemProps) {
+export function TaskItem({ task, onToggle, onSplit, onFocus, onAdd, onEdit }: TaskItemProps) {
   const hasChildren = task.children.length > 0
   const childrenSum = useMemo(() => calculateChildrenSum(task), [task])
   const isOverEstimate = hasChildren && childrenSum > task.estimate
@@ -59,9 +61,50 @@ export function TaskItem({ task, onToggle, onSplit, onFocus }: TaskItemProps) {
           </div>
         )}
 
-        <span className={cn("flex-1", getDepthStyle(task.depth))}>{task.title}</span>
+        <span className={cn("flex-1 cursor-default", getDepthStyle(task.depth))}>{task.title}</span>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* EDIT BUTTON */}
+          <button
+            onClick={() => onEdit(task)}
+            className="p-1.5 text-slate-500 hover:text-slate-300 transition-all"
+            title="Rename task"
+          >
+            <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
+          </button>
+
+          {/* ADD BUTTON */}
+          <button
+            onClick={() => onAdd(task)}
+            className="p-1.5 text-emerald-500 hover:text-emerald-400 transition-all"
+            title="Add subtask"
+          >
+            <Plus className="h-4 w-4" strokeWidth={1.5} />
+          </button>
+
+          {/* SPLIT BUTTON */}
+          <button
+            onClick={() => onSplit(task)}
+            className="p-1.5 text-cyan-500 hover:text-cyan-400 hover:animate-pulse-glow transition-all"
+            title="AI Split"
+          >
+            <Sparkles className="h-3.5 w-3.5" strokeWidth={1.5} />
+          </button>
+
+          {/* FOCUS BUTTON (Only if leaf) */}
+          {!hasChildren && (
+            <button
+              onClick={() => onFocus(task)}
+              className="p-1.5 text-amber-500 hover:text-amber-400 transition-all"
+              title="Focus"
+            >
+              <Play className="h-3.5 w-3.5" strokeWidth={1.5} />
+            </button>
+          )}
+        </div>
+
+        {/* Time Estimate (Always visible) */}
+        <div className="flex items-center gap-3 ml-2">
           {hasChildren && (
             <span className={cn("text-xs font-mono", isOverEstimate ? "text-amber-400" : "text-slate-500")}>
               {isOverEstimate && <AlertTriangle className="inline h-3 w-3 mr-1" strokeWidth={1.5} />}
@@ -69,31 +112,21 @@ export function TaskItem({ task, onToggle, onSplit, onFocus }: TaskItemProps) {
             </span>
           )}
           {!hasChildren && <span className="text-xs font-mono text-slate-500">{task.estimate}m</span>}
-
-          {!hasChildren && (
-            <button
-              onClick={() => onFocus(task)}
-              className="opacity-0 group-hover:opacity-100 p-1.5 text-emerald-400 hover:text-emerald-300 transition-all"
-              title="Focus on this task"
-            >
-              <Play className="h-4 w-4" strokeWidth={1.5} />
-            </button>
-          )}
-
-          <button
-            onClick={() => onSplit(task)}
-            className="opacity-0 group-hover:opacity-100 p-1.5 text-cyan-400 hover:animate-pulse-glow transition-all"
-            title="Split task"
-          >
-            <Sparkles className="h-4 w-4" strokeWidth={1.5} />
-          </button>
         </div>
       </div>
 
       {hasChildren && task.isExpanded && (
         <div>
           {task.children.map((child) => (
-            <TaskItem key={child.id} task={child} onToggle={onToggle} onSplit={onSplit} onFocus={onFocus} />
+            <TaskItem
+              key={child.id}
+              task={child}
+              onToggle={onToggle}
+              onSplit={onSplit}
+              onFocus={onFocus}
+              onAdd={onAdd}   // Pass down
+              onEdit={onEdit} // Pass down
+            />
           ))}
         </div>
       )}

@@ -107,10 +107,55 @@ import { CreateProjectView } from "@/components/create-project-view"
 
 // ... (helper functions - keep them as they are, no changes needed to them)
 
+// --- HELPER: Convert DB "Flat Rows" to UI "Tree" ---
+function buildTaskTree(flatTasks: any[], rootTitle: string): Task {
+  // 1. Create a map for quick lookups
+  const taskMap: Record<string, Task> = {}
+
+  // 2. Initialize all tasks with empty children
+  flatTasks.forEach(t => {
+    taskMap[t.id] = {
+      id: String(t.id),
+      title: t.title,
+      estimate: t.estimate,
+      depth: 0, // Will calculate later
+      children: [],
+      isExpanded: true // Default to expanded for now
+    }
+  })
+
+  // 3. Create a fake "Root" task to hold the top-level items
+  const root: Task = {
+    id: "root",
+    title: rootTitle,
+    estimate: 0,
+    depth: 0,
+    children: []
+  }
+
+  // 4. Assemble the tree
+  flatTasks.forEach(t => {
+    if (t.parent_id && taskMap[t.parent_id]) {
+      taskMap[t.parent_id].children.push(taskMap[t.id])
+    } else {
+      root.children.push(taskMap[t.id])
+    }
+  })
+
+  // 5. Calculate depths recursively (optional but good for UI)
+  const calcDepth = (node: Task, depth: number) => {
+    node.depth = depth
+    node.children.forEach(c => calcDepth(c, depth + 1))
+  }
+  calcDepth(root, -1) // Root is -1 so children start at 0
+
+  return root
+}
+
 export default function FractalFocus() {
   const [projects, setProjects] = useState<Project[]>([])
-  const [tasks, setTasks] = useState<Task>(initialTasks)
-  const [activeProjectId, setActiveProjectId] = useState("album")
+  const [tasks, setTasks] = useState<Task>({ id: "root", title: "Loading...", estimate: 0, depth: 0, children: [] })
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [splitTask, setSplitTask] = useState<Task | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
@@ -125,9 +170,13 @@ export default function FractalFocus() {
         const data = await res.json()
 
         if (Array.isArray(data)) {
-          setProjects(data as Project[])
-          if (data.length > 0 && !activeProjectId) {
-            setActiveProjectId(data[0].id)
+          // Normalize IDs to strings to prevent type mismatch errors
+          const normalizedProjects = data.map((p: any) => ({ ...p, id: String(p.id) }))
+          setProjects(normalizedProjects)
+
+          // Select the first project automatically if none selected
+          if (normalizedProjects.length > 0 && !activeProjectId) {
+            setActiveProjectId(String(normalizedProjects[0].id))
           }
         }
       } catch (error) {
@@ -136,6 +185,40 @@ export default function FractalFocus() {
     }
 
     fetchProjects()
+  }, []) // Empty dependency array = run once
+
+  // 3. LISTEN for project changes to clear/load tasks
+  useEffect(() => {
+    if (!activeProjectId) return
+
+    // Find the current project's name
+    const currentProject = projects.find(p => String(p.id) === activeProjectId)
+    const rootName = currentProject ? currentProject.name : "Project Root"
+
+    const fetchTasks = async () => {
+      // Clear old data while loading
+      setTasks(prev => ({ ...prev, id: "root", children: [], title: rootName }))
+
+      try {
+        const res = await fetch(`/api/tasks?projectId=${activeProjectId}`)
+        const flatData = await res.json()
+
+        if (Array.isArray(flatData)) {
+          const treeStructure = buildTaskTree(flatData, rootName)
+          setTasks(treeStructure)
+        }
+      } catch (error) {
+        console.error("Task fetch error:", error)
+      }
+    }
+
+    fetchTasks()
+  }, [activeProjectId, projects])
+
+  const handleProjectSelect = useCallback((id: string) => {
+    // Force ID to string to be safe
+    setActiveProjectId(String(id))
+    setViewMode('TREE') // Switch back to tree view if they were in Create mode
   }, [])
 
   const handleToggle = useCallback((id: string) => {
@@ -147,16 +230,103 @@ export default function FractalFocus() {
     setIsModalOpen(true)
   }, [])
 
-  const handleApply = useCallback((taskId: string, subtasks: ProposedSubtask[]) => {
-    setTasks((prev) => applySubtasks(prev, taskId, subtasks))
+  const handleApply = useCallback(async (taskId: string, subtasks: ProposedSubtask[]) => {
+    if (!activeProjectId) return
+
+    // 1. Filter for selected subtasks
+    const selectedSubtasks = subtasks.filter(s => s.selected)
+
+    // 2. Save each to DB
+    for (const subtask of selectedSubtasks) {
+      try {
+        await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: subtask.title,
+            estimate: subtask.estimate,
+            projectId: activeProjectId,
+            parentId: taskId === 'root' ? null : taskId // Handle root splitting
+          })
+        })
+      } catch (error) {
+        console.error("Failed to create subtask:", error)
+      }
+    }
+
+    // 3. Re-fetch to update UI with real IDs
+    // We duplicate the fetch logic here for simplicity, or we could move fetchTasks outside useEffect
+    try {
+      const res = await fetch(`/api/tasks?projectId=${activeProjectId}`)
+      const flatData = await res.json()
+
+      const currentProject = projects.find(p => String(p.id) === activeProjectId)
+      const rootName = currentProject ? currentProject.name : "Project Root"
+
+      if (Array.isArray(flatData)) {
+        setTasks(buildTaskTree(flatData, rootName))
+      }
+    } catch (error) {
+      console.error("Refetch error:", error)
+    }
+
     setIsModalOpen(false)
     setSplitTask(null)
-  }, [])
+  }, [activeProjectId])
 
   const handleCloseModal = useCallback(() => {
     setIsModalOpen(false)
     setSplitTask(null)
   }, [])
+
+  const handleManualAdd = useCallback(async (parentTask: Task) => {
+    if (!activeProjectId) return
+
+    // Simple prompt for now
+    const title = window.prompt(`Add subtask to "${parentTask.title}":`)
+    if (!title) return
+
+    try {
+      // Optimistic Update (Optional, but makes it snappy)
+      // For now, let's just wait for the fetch to keep it simple
+
+      await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title,
+          estimate: 15, // Default estimate
+          projectId: activeProjectId,
+          parentId: parentTask.id === 'root' ? null : parentTask.id
+        })
+      })
+
+      // Refresh Data
+      const res = await fetch(`/api/tasks?projectId=${activeProjectId}`)
+      const flatData = await res.json()
+
+      const currentProject = projects.find(p => String(p.id) === activeProjectId)
+      const rootName = currentProject ? currentProject.name : "Project Root"
+
+      if (Array.isArray(flatData)) {
+        setTasks(buildTaskTree(flatData, rootName))
+      }
+
+    } catch (error) {
+      console.error("Failed to add task:", error)
+    }
+  }, [activeProjectId, projects])
+
+  const handleEdit = useCallback(async (task: Task) => {
+    const newTitle = window.prompt("Rename task:", task.title)
+    if (!newTitle || newTitle === task.title) return
+
+    // TODO: You need to create a PATCH endpoint in /api/tasks to support renaming
+    // For now, we just log it so it doesn't crash
+    console.log("Renaming to:", newTitle)
+    alert("Edit API not built yet! But the button works.")
+  }, [])
+
 
   const handleFocus = useCallback((task: Task) => {
     setFocusedTaskId(task.id)
@@ -309,13 +479,20 @@ export default function FractalFocus() {
     <div className="flex h-screen">
       <Sidebar
         projects={projects}
-        activeProjectId={activeProjectId}
-        onProjectSelect={setActiveProjectId}
+        activeProjectId={activeProjectId || ""} // Pass empty string if null
+        onProjectSelect={handleProjectSelect} // Use our new safe handler
         completedCount={completedTasks.length}
         onOpenCompleted={() => setIsCompletedPanelOpen(true)}
         onNewProject={() => setViewMode('CREATE')}
       />
-      <MainStage tasks={tasks} onToggle={handleToggle} onSplit={handleSplit} onFocus={handleFocus} />
+      <MainStage
+        tasks={tasks}
+        onToggle={handleToggle}
+        onSplit={handleSplit}
+        onFocus={handleFocus}
+        onAdd={handleManualAdd}
+        onEdit={handleEdit}
+      />
       <SplitModal task={splitTask} isOpen={isModalOpen} onClose={handleCloseModal} onApply={handleApply} />
       <CompletedPanel
         completedTasks={completedTasks}
