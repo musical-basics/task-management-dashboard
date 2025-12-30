@@ -104,6 +104,7 @@ function findParentOf(rootTask: Task, targetId: string, parent: Task | null = nu
 
 // ... (previous imports)
 import { CreateProjectView } from "@/components/create-project-view"
+import { TaskModal } from "@/components/task-modal"
 
 // ... (helper functions - keep them as they are, no changes needed to them)
 
@@ -162,6 +163,12 @@ export default function FractalFocus() {
   const [completedTasks, setCompletedTasks] = useState<CompletedTask[]>([])
   const [isCompletedPanelOpen, setIsCompletedPanelOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'TREE' | 'FOCUS' | 'CREATE'>('TREE')
+
+  // --- NEW STATE FOR ADD/EDIT MODAL ---
+  const [taskModalOpen, setTaskModalOpen] = useState(false)
+  const [taskModalMode, setTaskModalMode] = useState<"add" | "edit">("add")
+  const [selectedTaskNode, setSelectedTaskNode] = useState<Task | null>(null) // The task being acted upon
+  // ------------------------------------
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -279,53 +286,59 @@ export default function FractalFocus() {
     setSplitTask(null)
   }, [])
 
-  const handleManualAdd = useCallback(async (parentTask: Task) => {
-    if (!activeProjectId) return
+  // 1. OPEN ADD MODAL
+  const handleManualAdd = useCallback((parentTask: Task) => {
+    setSelectedTaskNode(parentTask)
+    setTaskModalMode("add")
+    setTaskModalOpen(true)
+  }, [])
 
-    // Simple prompt for now
-    const title = window.prompt(`Add subtask to "${parentTask.title}":`)
-    if (!title) return
+  // 2. OPEN EDIT MODAL
+  const handleEdit = useCallback((task: Task) => {
+    setSelectedTaskNode(task)
+    setTaskModalMode("edit")
+    setTaskModalOpen(true)
+  }, [])
+
+  // 3. SAVE FUNCTION (Called by Modal)
+  const handleTaskModalConfirm = useCallback(async (title: string, estimate: number) => {
+    if (!activeProjectId || !selectedTaskNode) return
 
     try {
-      // Optimistic Update (Optional, but makes it snappy)
-      // For now, let's just wait for the fetch to keep it simple
-
-      await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title,
-          estimate: 15, // Default estimate
-          projectId: activeProjectId,
-          parentId: parentTask.id === 'root' ? null : parentTask.id
+      if (taskModalMode === 'add') {
+        // CREATE NEW
+        await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            estimate,
+            projectId: activeProjectId,
+            parentId: selectedTaskNode.id === 'root' ? null : selectedTaskNode.id
+          })
         })
-      })
+      } else {
+        // EDIT EXISTING
+        await fetch(`/api/tasks/${selectedTaskNode.id}`, { // This calls the new route
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, estimate })
+        })
+      }
 
-      // Refresh Data
+      // REFRESH DATA
       const res = await fetch(`/api/tasks?projectId=${activeProjectId}`)
       const flatData = await res.json()
-
       const currentProject = projects.find(p => String(p.id) === activeProjectId)
       const rootName = currentProject ? currentProject.name : "Project Root"
 
       if (Array.isArray(flatData)) {
         setTasks(buildTaskTree(flatData, rootName))
       }
-
     } catch (error) {
-      console.error("Failed to add task:", error)
+      console.error("Task operation failed:", error)
     }
-  }, [activeProjectId, projects])
-
-  const handleEdit = useCallback(async (task: Task) => {
-    const newTitle = window.prompt("Rename task:", task.title)
-    if (!newTitle || newTitle === task.title) return
-
-    // TODO: You need to create a PATCH endpoint in /api/tasks to support renaming
-    // For now, we just log it so it doesn't crash
-    console.log("Renaming to:", newTitle)
-    alert("Edit API not built yet! But the button works.")
-  }, [])
+  }, [activeProjectId, selectedTaskNode, taskModalMode, projects])
 
 
   const handleFocus = useCallback((task: Task) => {
@@ -498,6 +511,18 @@ export default function FractalFocus() {
         completedTasks={completedTasks}
         isOpen={isCompletedPanelOpen}
         onClose={() => setIsCompletedPanelOpen(false)}
+      />
+
+      {/* NEW TASK MODAL */}
+      <TaskModal
+        isOpen={taskModalOpen}
+        onClose={() => setTaskModalOpen(false)}
+        onConfirm={handleTaskModalConfirm}
+        mode={taskModalMode}
+        initialData={taskModalMode === 'edit' && selectedTaskNode ? {
+          title: selectedTaskNode.title,
+          estimate: selectedTaskNode.estimate
+        } : undefined}
       />
     </div>
   )
