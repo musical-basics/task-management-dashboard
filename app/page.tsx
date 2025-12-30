@@ -340,6 +340,32 @@ export default function FractalFocus() {
     }
   }, [activeProjectId, selectedTaskNode, taskModalMode, projects])
 
+  // 4. DELETE TASK
+  const handleDelete = useCallback(async (task: Task) => {
+    if (!activeProjectId) return
+
+    // Safety check: Native confirm to prevent accidental deletion of huge trees
+    if (!confirm(`Are you sure you want to delete "${task.title}"?`)) return
+
+    try {
+      await fetch(`/api/tasks/${task.id}`, {
+        method: 'DELETE',
+      })
+
+      // Refresh Data
+      const res = await fetch(`/api/tasks?projectId=${activeProjectId}`)
+      const flatData = await res.json()
+      const currentProject = projects.find(p => String(p.id) === activeProjectId)
+      const rootName = currentProject ? currentProject.name : "Project Root"
+
+      if (Array.isArray(flatData)) {
+        setTasks(buildTaskTree(flatData, rootName))
+      }
+    } catch (error) {
+      console.error("Failed to delete task:", error)
+    }
+  }, [activeProjectId, projects])
+
 
   const handleFocus = useCallback((task: Task) => {
     setFocusedTaskId(task.id)
@@ -505,6 +531,7 @@ export default function FractalFocus() {
         onFocus={handleFocus}
         onAdd={handleManualAdd}
         onEdit={handleEdit}
+        onDelete={handleDelete}
       />
       <SplitModal task={splitTask} isOpen={isModalOpen} onClose={handleCloseModal} onApply={handleApply} />
       <CompletedPanel

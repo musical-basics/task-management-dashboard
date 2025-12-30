@@ -2,7 +2,8 @@
 
 import type { Task } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { ChevronRight, AlertTriangle, Sparkles, Play, Plus, Pencil } from "lucide-react"
+// Add Trash2 to imports
+import { ChevronRight, AlertTriangle, Sparkles, Play, Plus, Pencil, Trash2 } from "lucide-react"
 import { useMemo } from "react"
 
 interface TaskItemProps {
@@ -10,8 +11,9 @@ interface TaskItemProps {
   onToggle: (id: string) => void
   onSplit: (task: Task) => void
   onFocus: (task: Task) => void
-  onAdd: (task: Task) => void   // <--- NEW
-  onEdit: (task: Task) => void  // <--- NEW
+  onAdd: (task: Task) => void
+  onEdit: (task: Task) => void
+  onDelete: (task: Task) => void // <--- NEW PROP
 }
 
 function calculateChildrenSum(task: Task): number {
@@ -19,7 +21,7 @@ function calculateChildrenSum(task: Task): number {
   return task.children.reduce((sum, child) => sum + child.estimate, 0)
 }
 
-export function TaskItem({ task, onToggle, onSplit, onFocus, onAdd, onEdit }: TaskItemProps) {
+export function TaskItem({ task, onToggle, onSplit, onFocus, onAdd, onEdit, onDelete }: TaskItemProps) {
   const hasChildren = task.children.length > 0
   const childrenSum = useMemo(() => calculateChildrenSum(task), [task])
   const isOverEstimate = hasChildren && childrenSum > task.estimate
@@ -63,47 +65,37 @@ export function TaskItem({ task, onToggle, onSplit, onFocus, onAdd, onEdit }: Ta
 
         <span className={cn("flex-1 cursor-default", getDepthStyle(task.depth))}>{task.title}</span>
 
+        {/* Action Buttons */}
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {/* EDIT BUTTON */}
-          <button
-            onClick={() => onEdit(task)}
-            className="p-1.5 text-slate-500 hover:text-slate-300 transition-all"
-            title="Rename task"
-          >
+
+          {/* EDIT */}
+          <button onClick={() => onEdit(task)} className="p-1.5 text-slate-500 hover:text-slate-300 transition-all" title="Rename">
             <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
           </button>
 
-          {/* ADD BUTTON */}
-          <button
-            onClick={() => onAdd(task)}
-            className="p-1.5 text-emerald-500 hover:text-emerald-400 transition-all"
-            title="Add subtask"
-          >
+          {/* ADD */}
+          <button onClick={() => onAdd(task)} className="p-1.5 text-emerald-500 hover:text-emerald-400 transition-all" title="Add subtask">
             <Plus className="h-4 w-4" strokeWidth={1.5} />
           </button>
 
-          {/* SPLIT BUTTON */}
-          <button
-            onClick={() => onSplit(task)}
-            className="p-1.5 text-cyan-500 hover:text-cyan-400 hover:animate-pulse-glow transition-all"
-            title="AI Split"
-          >
+          {/* SPLIT */}
+          <button onClick={() => onSplit(task)} className="p-1.5 text-cyan-500 hover:text-cyan-400 hover:animate-pulse-glow transition-all" title="AI Split">
             <Sparkles className="h-3.5 w-3.5" strokeWidth={1.5} />
           </button>
 
-          {/* FOCUS BUTTON (Only if leaf) */}
+          {/* DELETE (NEW) */}
+          <button onClick={() => onDelete(task)} className="p-1.5 text-slate-600 hover:text-red-400 transition-all" title="Delete">
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+          </button>
+
+          {/* FOCUS */}
           {!hasChildren && (
-            <button
-              onClick={() => onFocus(task)}
-              className="p-1.5 text-amber-500 hover:text-amber-400 transition-all"
-              title="Focus"
-            >
+            <button onClick={() => onFocus(task)} className="p-1.5 text-amber-500 hover:text-amber-400 transition-all" title="Focus">
               <Play className="h-3.5 w-3.5" strokeWidth={1.5} />
             </button>
           )}
         </div>
 
-        {/* Time Estimate (Always visible) */}
         <div className="flex items-center gap-3 ml-2">
           {hasChildren && (
             <span className={cn("text-xs font-mono", isOverEstimate ? "text-amber-400" : "text-slate-500")}>
@@ -124,8 +116,9 @@ export function TaskItem({ task, onToggle, onSplit, onFocus, onAdd, onEdit }: Ta
               onToggle={onToggle}
               onSplit={onSplit}
               onFocus={onFocus}
-              onAdd={onAdd}   // Pass down
-              onEdit={onEdit} // Pass down
+              onAdd={onAdd}
+              onEdit={onEdit}
+              onDelete={onDelete} // <--- Pass down
             />
           ))}
         </div>

@@ -9,8 +9,9 @@ interface MainStageProps {
   onToggle: (id: string) => void
   onSplit: (task: Task) => void
   onFocus: (task: Task) => void
-  onAdd: (task: Task) => void   // <--- NEW
-  onEdit: (task: Task) => void  // <--- NEW
+  onAdd: (task: Task) => void
+  onEdit: (task: Task) => void
+  onDelete: (task: Task) => void // <--- NEW PROP
 }
 
 function calculateTotalTime(task: Task): number {
@@ -18,7 +19,7 @@ function calculateTotalTime(task: Task): number {
   return task.children.reduce((sum, child) => sum + calculateTotalTime(child), 0)
 }
 
-export function MainStage({ tasks, onToggle, onSplit, onFocus, onAdd, onEdit }: MainStageProps) {
+export function MainStage({ tasks, onToggle, onSplit, onFocus, onAdd, onEdit, onDelete }: MainStageProps) {
   const totalAccumulated = calculateTotalTime(tasks)
   const isOverBudget = totalAccumulated > tasks.estimate
 
@@ -41,7 +42,6 @@ export function MainStage({ tasks, onToggle, onSplit, onFocus, onAdd, onEdit }: 
               </div>
             </div>
 
-            {/* Top Level Add Button */}
             <button
               onClick={() => onAdd(tasks)}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-sm font-medium rounded-lg transition-all border border-emerald-500/20 hover:border-emerald-500/40"
@@ -74,8 +74,9 @@ export function MainStage({ tasks, onToggle, onSplit, onFocus, onAdd, onEdit }: 
                 onToggle={onToggle}
                 onSplit={onSplit}
                 onFocus={onFocus}
-                onAdd={onAdd}   // <--- Pass it down
-                onEdit={onEdit} // <--- Pass it down
+                onAdd={onAdd}
+                onEdit={onEdit}
+                onDelete={onDelete} // <--- Pass down
               />
             ))
           )}
