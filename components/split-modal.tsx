@@ -5,18 +5,20 @@ import type { Task, ProposedSubtask } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { X, Plus, Sparkles, Loader2 } from "lucide-react"
+import { X, Plus, Sparkles, Loader2, Zap, Brain } from "lucide-react"
 
 interface SplitModalProps {
   task: Task | null
+  context?: string
   isOpen: boolean
   onClose: () => void
   onApply: (taskId: string, subtasks: ProposedSubtask[]) => void
 }
 
-export function SplitModal({ task, isOpen, onClose, onApply }: SplitModalProps) {
+export function SplitModal({ task, context, isOpen, onClose, onApply }: SplitModalProps) {
   const [subtasks, setSubtasks] = useState<ProposedSubtask[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [effortMode, setEffortMode] = useState<"quick" | "planning">("quick")
 
   // Fetch AI Suggestions when modal opens
   useEffect(() => {
@@ -30,7 +32,11 @@ export function SplitModal({ task, isOpen, onClose, onApply }: SplitModalProps) 
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taskTitle: task.title })
+          body: JSON.stringify({
+            taskTitle: task.title,
+            context: context,
+            mode: effortMode
+          })
         })
 
         const data = await res.json()
@@ -55,7 +61,7 @@ export function SplitModal({ task, isOpen, onClose, onApply }: SplitModalProps) 
     if (isOpen) {
       generateSubtasks()
     }
-  }, [isOpen, task])
+  }, [isOpen, task, effortMode])
 
   const totalTime = subtasks.filter((s) => s.selected).reduce((sum, s) => sum + s.estimate, 0)
   const targetTime = task?.estimate || 0
@@ -84,6 +90,26 @@ export function SplitModal({ task, isOpen, onClose, onApply }: SplitModalProps) 
             Splitting: "{task?.title}"
           </DialogTitle>
         </DialogHeader>
+
+        {/* Effort Mode Toggle */}
+        <div className="px-6 pt-2">
+          <div className="flex bg-slate-800/50 p-1 rounded-lg border border-white/5">
+            <button
+              onClick={() => setEffortMode("quick")}
+              className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-md text-xs font-medium transition-all ${effortMode === "quick" ? "bg-cyan-500/20 text-cyan-300 shadow-sm" : "text-slate-500 hover:text-slate-300"}`}
+            >
+              <Zap className="w-3 h-3" />
+              Quick Action
+            </button>
+            <button
+              onClick={() => setEffortMode("planning")}
+              className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-md text-xs font-medium transition-all ${effortMode === "planning" ? "bg-purple-500/20 text-purple-300 shadow-sm" : "text-slate-500 hover:text-slate-300"}`}
+            >
+              <Brain className="w-3 h-3" />
+              Deep Planning
+            </button>
+          </div>
+        </div>
 
         <div className="py-5">
           {isLoading ? (

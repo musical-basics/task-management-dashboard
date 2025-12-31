@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react"
 import type { Task, ProposedSubtask, CompletedTask, Project } from "@/lib/types"
+import { buildContextString } from "@/lib/context-utils"
 import { initialTasks } from "@/lib/mock-data"
 // import { supabase } from "@/lib/supabaseClient" // Not needed in client anymore for projects
 import { Sidebar } from "@/components/sidebar"
@@ -158,11 +159,13 @@ export default function FractalFocus() {
   const [tasks, setTasks] = useState<Task>({ id: "root", title: "Loading...", estimate: 0, depth: 0, children: [] })
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [splitTask, setSplitTask] = useState<Task | null>(null)
+  const [splitContext, setSplitContext] = useState<string>("") // Context for AI
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
   const [completedTasks, setCompletedTasks] = useState<CompletedTask[]>([])
   const [isCompletedPanelOpen, setIsCompletedPanelOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'TREE' | 'FOCUS' | 'CREATE'>('TREE')
+  const [fastDeleteMode, setFastDeleteMode] = useState(false)
 
   // --- NEW STATE FOR ADD/EDIT MODAL ---
   const [taskModalOpen, setTaskModalOpen] = useState(false)
@@ -233,9 +236,12 @@ export default function FractalFocus() {
   }, [])
 
   const handleSplit = useCallback((task: Task) => {
+    // Generate context string for AI
+    const context = buildContextString(tasks, task.id)
+    setSplitContext(context)
     setSplitTask(task)
     setIsModalOpen(true)
-  }, [])
+  }, [tasks])
 
   const handleApply = useCallback(async (taskId: string, subtasks: ProposedSubtask[]) => {
     if (!activeProjectId) return
@@ -345,7 +351,10 @@ export default function FractalFocus() {
     if (!activeProjectId) return
 
     // Safety check: Native confirm to prevent accidental deletion of huge trees
-    if (!confirm(`Are you sure you want to delete "${task.title}"?`)) return
+    // Bypass if Fast Delete is enabled
+    if (!fastDeleteMode) {
+      if (!confirm(`Are you sure you want to delete "${task.title}"?`)) return
+    }
 
     try {
       await fetch(`/api/tasks/${task.id}`, {
@@ -364,7 +373,7 @@ export default function FractalFocus() {
     } catch (error) {
       console.error("Failed to delete task:", error)
     }
-  }, [activeProjectId, projects])
+  }, [activeProjectId, projects, fastDeleteMode])
 
 
   const handleFocus = useCallback((task: Task) => {
@@ -509,7 +518,7 @@ export default function FractalFocus() {
           onAdvanceToNext={handleAdvanceToNext}
           hasMoreTasks={hasMoreTasks}
         />
-        <SplitModal task={splitTask} isOpen={isModalOpen} onClose={handleCloseModal} onApply={handleApply} />
+        <SplitModal task={splitTask} context={splitContext} isOpen={isModalOpen} onClose={handleCloseModal} onApply={handleApply} />
       </>
     )
   }
@@ -523,6 +532,8 @@ export default function FractalFocus() {
         completedCount={completedTasks.length}
         onOpenCompleted={() => setIsCompletedPanelOpen(true)}
         onNewProject={() => setViewMode('CREATE')}
+        fastMode={fastDeleteMode}
+        onToggleFastMode={() => setFastDeleteMode(prev => !prev)}
       />
       <MainStage
         tasks={tasks}
@@ -533,7 +544,7 @@ export default function FractalFocus() {
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
-      <SplitModal task={splitTask} isOpen={isModalOpen} onClose={handleCloseModal} onApply={handleApply} />
+      <SplitModal task={splitTask} context={splitContext} isOpen={isModalOpen} onClose={handleCloseModal} onApply={handleApply} />
       <CompletedPanel
         completedTasks={completedTasks}
         isOpen={isCompletedPanelOpen}

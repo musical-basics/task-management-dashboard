@@ -6,7 +6,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "")
 
 export async function POST(req: Request) {
   try {
-    const { taskTitle, context } = await req.json()
+    const { taskTitle, context, mode } = await req.json()
 
     if (!taskTitle) {
       return NextResponse.json({ error: "Task title is required" }, { status: 400 })
@@ -18,21 +18,30 @@ export async function POST(req: Request) {
       model: "gemini-2.0-flash-exp"
     })
 
+    const isQuick = mode === "quick"
+
     const prompt = `
-      You are an expert project manager. 
-      Break down the task "${taskTitle}" into 3-5 actionable, concrete subtasks.
-      Context: ${context || "General task"}
+      You are a ${isQuick ? "pragmatic productivity assistant" : "thorough project manager"}.
+      ${isQuick
+        ? "Your goal is to break tasks into IMMEDIATE physical actions. Assume the user is competent and just needs a checklist."
+        : "Your goal is to create a detailed plan, including necessary research, review, and preparation phases."}
+
+      Task: "${taskTitle}"
       
+      ${context || "Context: General task"}
+
       Rules:
-      1. Each subtask must have a time estimate in minutes (integer).
-      2. Total time should be roughly realistic.
-      3. Return ONLY raw JSON (do not use markdown blocks like \`\`\`json).
+      1. Break into 3-5 subtasks.
+      2. Each subtask must have a 'title' and 'estimate' in minutes.
+      3. Return ONLY raw JSON (no markdown).
+      4. CRITICAL: Review the "CONTEXT". Do NOT duplicate sibling tasks.
+      ${isQuick ? "5. STRICT RULE: NO 'Brainstorm', 'Research', or 'List options'. Go straight to the physical action (e.g. 'Pick song' not 'List potential songs')." : ""}
       
       Example Output:
       {
         "tasks": [
-          { "title": "Subtask name", "estimate": 15 },
-          { "title": "Another step", "estimate": 10 }
+          { "title": "${isQuick ? "Do action A" : "Research Phase 1"}", "estimate": 15 },
+          { "title": "${isQuick ? "Do action B" : "Analysis Phase"}", "estimate": 10 }
         ]
       }
     `

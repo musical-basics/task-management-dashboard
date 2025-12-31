@@ -2,7 +2,7 @@
 
 import type { Project } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { Zap, CheckCircle2, Plus } from "lucide-react"
+import { Zap, CheckCircle2, Plus, Trash2 } from "lucide-react"
 
 interface SidebarProps {
   projects: Project[]
@@ -11,6 +11,8 @@ interface SidebarProps {
   completedCount?: number
   onOpenCompleted?: () => void
   onNewProject?: () => void
+  fastMode: boolean
+  onToggleFastMode: () => void
 }
 
 export function Sidebar({
@@ -20,6 +22,8 @@ export function Sidebar({
   completedCount = 0,
   onOpenCompleted,
   onNewProject,
+  fastMode,
+  onToggleFastMode,
 }: SidebarProps) {
   const groupedProjects = {
     creative: projects.filter((p) => p.mode === "creative"),
@@ -92,9 +96,17 @@ export function Sidebar({
           <Plus className="h-4 w-4" strokeWidth={1.5} />
           <span>New Project</span>
         </button>
-        <button className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm text-slate-400 hover:text-amber-400 transition-colors rounded-lg hover:bg-white/5">
-          <Zap className="h-4 w-4" strokeWidth={1.5} />
-          <span>Quick Switch</span>
+        <button
+          onClick={onToggleFastMode}
+          className={cn(
+            "w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm transition-colors rounded-lg",
+            fastMode
+              ? "text-red-400 bg-red-500/10 hover:bg-red-500/20"
+              : "text-slate-400 hover:text-red-400 hover:bg-white/5"
+          )}
+        >
+          <Trash2 className="h-4 w-4" strokeWidth={1.5} />
+          <span>Fast Mode: {fastMode ? "ON" : "OFF"}</span>
         </button>
       </div>
     </aside>
