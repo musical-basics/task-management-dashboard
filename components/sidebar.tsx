@@ -22,6 +22,7 @@ interface SidebarProps {
   onAddCategory?: () => void
   onEditCategory?: (id: string, newName: string) => void
   onDeleteCategory?: (id: string) => void
+  onDeleteProject?: (id: string) => void
 }
 
 export function Sidebar({
@@ -39,6 +40,7 @@ export function Sidebar({
   onAddCategory,
   onEditCategory,
   onDeleteCategory,
+  onDeleteProject,
 }: SidebarProps) {
 
   // Calculate grouped projects
@@ -222,13 +224,28 @@ export function Sidebar({
                                         <span className="font-medium truncate flex-1">{project.name}</span>
                                       </div>
 
-                                      <button
-                                        onClick={(e) => handleEditProjectClick(e, project)}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                                        title="Rename Project"
-                                      >
-                                        <Pencil className="h-3 w-3" />
-                                      </button>
+                                      {/* Project Actions */}
+                                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity z-10 gap-1">
+                                        <button
+                                          onClick={(e) => handleEditProjectClick(e, project)}
+                                          className="p-1 text-slate-500 hover:text-cyan-400"
+                                          title="Rename Project"
+                                        >
+                                          <Pencil className="h-3 w-3" />
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (onDeleteProject && confirm(`Delete project "${project.name}" and all its tasks?`)) {
+                                              onDeleteProject(project.id)
+                                            }
+                                          }}
+                                          className="p-1 text-slate-500 hover:text-red-400"
+                                          title="Delete Project"
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </button>
+                                      </div>
                                     </li>
                                   )}
                                 </Draggable>

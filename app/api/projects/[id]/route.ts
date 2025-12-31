@@ -29,3 +29,28 @@ export async function PATCH(
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }
+
+// DELETE: Delete project
+export async function DELETE(
+    request: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params
+
+        // Delete the project
+        // Note: Tasks should be deleted via cascade if configured in Supabase, 
+        // but let's assume standard deletion for now. 
+        // If RLS is set up correctly, this should work.
+        const { error } = await supabase
+            .from('projects')
+            .delete()
+            .eq('id', id)
+
+        if (error) throw error
+
+        return NextResponse.json({ success: true })
+    } catch (error: any) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+}

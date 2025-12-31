@@ -10,6 +10,9 @@ import { MainStage } from "@/components/main-stage"
 import { SplitModal } from "@/components/split-modal"
 import { FocusMode } from "@/components/focus-mode"
 import { CompletedPanel } from "@/components/completed-panel"
+import { CreateProjectView } from "@/components/create-project-view"
+import { CreateCategoryView } from "@/components/create-category-view"
+import { TaskModal } from "@/components/task-modal"
 
 function toggleTaskExpansion(task: Task, targetId: string): Task {
   if (task.id === targetId) {
@@ -104,8 +107,7 @@ function findParentOf(rootTask: Task, targetId: string, parent: Task | null = nu
 }
 
 // ... (previous imports)
-import { CreateProjectView } from "@/components/create-project-view"
-import { TaskModal } from "@/components/task-modal"
+
 
 // ... (helper functions - keep them as they are, no changes needed to them)
 
@@ -165,7 +167,7 @@ export default function FractalFocus() {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
   const [completedTasks, setCompletedTasks] = useState<CompletedTask[]>([])
   const [isCompletedPanelOpen, setIsCompletedPanelOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<'TREE' | 'FOCUS' | 'CREATE'>('TREE')
+  const [viewMode, setViewMode] = useState<'TREE' | 'FOCUS' | 'CREATE' | 'CREATE_CATEGORY'>('TREE')
   const [fastDeleteMode, setFastDeleteMode] = useState(false)
 
   // --- NEW STATE FOR ADD/EDIT MODAL ---
@@ -563,20 +565,8 @@ export default function FractalFocus() {
   const focusedData = focusedTaskId ? findTaskWithParent(tasks, focusedTaskId) : null
   const activeProject = projects.find((p) => p.id === activeProjectId) || projects[0]
 
-  if (viewMode === 'CREATE') {
-    return (
-      <CreateProjectView
-        onCancel={() => setViewMode('TREE')}
-        onCreate={handleCreateProject}
-      />
-    )
-  }
-
-  // NEW: Category Management Handlers
-  const handleAddCategory = useCallback(async () => {
-    const name = prompt("Enter new category name:")
-    if (!name || !name.trim()) return
-
+  // NEW: Handle Category Creation via Custom UI
+  const handleCreateCategory = useCallback(async (name: string) => {
     try {
       const res = await fetch('/api/categories', {
         method: 'POST',
@@ -586,11 +576,17 @@ export default function FractalFocus() {
       const newCategory = await res.json()
       if (res.ok) {
         setCategories(prev => [...prev, newCategory])
+        setViewMode('TREE') // Go back to main view
       }
     } catch (error) {
       console.error("Failed to add category:", error)
     }
   }, [categories.length])
+
+  // NEW: Category Management Handlers
+  const handleAddCategory = useCallback(() => {
+    setViewMode('CREATE_CATEGORY')
+  }, [])
 
   const handleEditCategory = useCallback(async (id: string, newName: string) => {
     // Optimistic Update
@@ -622,6 +618,46 @@ export default function FractalFocus() {
     }
   }, [])
 
+  const handleDeleteProject = useCallback(async (id: string) => {
+    // 1. Optimistic Update
+    setProjects(prev => prev.filter(p => p.id !== id))
+
+    // 2. If active project is deleted, select another one or none
+    if (activeProjectId === id) {
+      setActiveProjectId(null)
+      // The existing useEffect will pick a new one or create a default if projects is empty?
+      // Actually, we might want to manually select the first available one to be safe/fast.
+      // But let's let the state update settle.
+    }
+
+    // 3. API Call
+    try {
+      await fetch(`/api/projects/${id}`, {
+        method: 'DELETE'
+      })
+    } catch (error) {
+      console.error("Failed to delete project:", error)
+    }
+  }, [activeProjectId])
+
+  if (viewMode === 'CREATE') {
+    return (
+      <CreateProjectView
+        onCancel={() => setViewMode('TREE')}
+        onCreate={handleCreateProject}
+      />
+    )
+  }
+
+  if (viewMode === 'CREATE_CATEGORY') {
+    return (
+      <CreateCategoryView
+        onCancel={() => setViewMode('TREE')}
+        onCreate={handleCreateCategory}
+      />
+    )
+  }
+
   return (
     <div className="flex h-screen">
       <Sidebar
@@ -639,6 +675,7 @@ export default function FractalFocus() {
         onAddCategory={handleAddCategory}
         onEditCategory={handleEditCategory}
         onDeleteCategory={handleDeleteCategory}
+        onDeleteProject={handleDeleteProject}
       />
       <MainStage
         tasks={tasks}
