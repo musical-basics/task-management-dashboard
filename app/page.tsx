@@ -268,7 +268,6 @@ export default function FractalFocus() {
     }
 
     // 3. Re-fetch to update UI with real IDs
-    // We duplicate the fetch logic here for simplicity, or we could move fetchTasks outside useEffect
     try {
       const res = await fetch(`/api/tasks?projectId=${activeProjectId}`)
       const flatData = await res.json()
@@ -277,7 +276,17 @@ export default function FractalFocus() {
       const rootName = currentProject ? currentProject.name : "Project Root"
 
       if (Array.isArray(flatData)) {
-        setTasks(buildTaskTree(flatData, rootName))
+        const newTree = buildTaskTree(flatData, rootName)
+        setTasks(newTree)
+
+        // AUTO-ZOOM: If we just split the focused task, drill down to the first child
+        if (viewMode === 'FOCUS' && focusedTaskId === taskId) {
+          // We need to find the node in the NEW tree because it has the new children
+          const nodeData = findTaskWithParent(newTree, taskId)
+          if (nodeData && nodeData.task.children.length > 0) {
+            setFocusedTaskId(nodeData.task.children[0].id)
+          }
+        }
       }
     } catch (error) {
       console.error("Refetch error:", error)
@@ -285,7 +294,7 @@ export default function FractalFocus() {
 
     setIsModalOpen(false)
     setSplitTask(null)
-  }, [activeProjectId])
+  }, [activeProjectId, viewMode, focusedTaskId, projects])
 
   const handleCloseModal = useCallback(() => {
     setIsModalOpen(false)
