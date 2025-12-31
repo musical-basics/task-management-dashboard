@@ -14,6 +14,7 @@ interface FocusModeProps {
   onExit: () => void
   onAdvanceToNext: (currentTaskId: string) => Task | null
   hasMoreTasks: boolean
+  onNavigateToTask?: (taskId: string) => void
 }
 
 type TransitionState = "idle" | "exiting" | "success" | "entering"
@@ -27,6 +28,7 @@ export function FocusMode({
   onExit,
   onAdvanceToNext,
   hasMoreTasks,
+  onNavigateToTask,
 }: FocusModeProps) {
   const [transitionState, setTransitionState] = useState<TransitionState>("idle")
   const [displayedTask, setDisplayedTask] = useState(task)
@@ -107,7 +109,7 @@ export function FocusMode({
   }
 
   return (
-    <div className="fixed inset-0 bg-[#0B1120] flex items-center justify-center overflow-hidden">
+    <div className="fixed inset-0 bg-[#0B1120] flex items-center justify-center overflow-hidden z-[100]">
       {/* Radial glow background */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(6,182,212,0.08)_0%,_transparent_70%)]" />
 
@@ -120,9 +122,8 @@ export function FocusMode({
       </button>
 
       <div
-        className={`absolute inset-0 flex items-center justify-center z-20 transition-opacity duration-300 ${
-          transitionState === "success" ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
+        className={`absolute inset-0 flex items-center justify-center z-20 transition-opacity duration-300 ${transitionState === "success" ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
       >
         <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-[0_0_40px_rgba(52,211,153,0.5)] animate-bounce">
           <Check className="h-12 w-12 text-white" strokeWidth={2.5} />
@@ -131,24 +132,26 @@ export function FocusMode({
 
       {/* Glass card container with slide animations */}
       <div
-        className={`relative w-full max-w-xl mx-4 bg-slate-900/60 backdrop-blur-2xl border border-white/10 rounded-2xl p-10 flex flex-col items-center text-center transition-all duration-300 ${
-          transitionState === "exiting"
+        className={`relative w-full max-w-xl mx-4 bg-slate-900/60 backdrop-blur-2xl border border-white/10 rounded-2xl p-10 flex flex-col items-center text-center transition-all duration-300 ${transitionState === "exiting"
             ? "opacity-0 -translate-x-16"
             : transitionState === "entering"
               ? "opacity-100 translate-x-0 animate-slide-in-right"
               : transitionState === "success"
                 ? "opacity-0"
                 : "opacity-100"
-        }`}
+          }`}
       >
         {/* Level 1: Ultimate Parent (Project) */}
         <p className="text-xs uppercase tracking-widest text-slate-500 mb-1">Project: {project.name}</p>
 
         {/* Level 2: Immediate Context (Parent Task) */}
         {displayedParent && (
-          <p className="text-sm text-cyan-400/80 mb-8">
+          <button
+            onClick={() => onNavigateToTask?.(displayedParent.id)}
+            className="text-sm text-cyan-400/80 mb-8 hover:text-cyan-300 hover:underline transition-all cursor-pointer"
+          >
             <span className="mr-1">↳</span> In: {displayedParent.title}
-          </p>
+          </button>
         )}
 
         {/* Level 3: The Task - HERO */}

@@ -485,52 +485,27 @@ export default function FractalFocus() {
     )
   }
 
-  // Handle Focus Mode (keeping consistent with previous logic, but checking viewMode or focusedTaskId)
-  if (focusedData && viewMode === 'FOCUS') {
-    return (
-      <>
-        <FocusMode
-          task={focusedData.task}
-          parentTask={focusedData.parent}
-          project={activeProject}
-          onComplete={handleComplete}
-          onSplit={handleSplit}
-          onExit={handleExitFocus}
-          onAdvanceToNext={handleAdvanceToNext}
-          hasMoreTasks={hasMoreTasks}
-        />
-        <SplitModal task={splitTask} isOpen={isModalOpen} onClose={handleCloseModal} onApply={handleApply} />
-      </>
-    )
-  }
+  const handleNavigateToTask = useCallback((taskId: string) => {
+    // 1. Exit focus mode
+    setFocusedTaskId(null)
+    setViewMode('TREE')
 
-  // Also handle if focusedTaskId is set but viewMode might be TREE (legacy/defensive)
-  if (focusedData) {
-    // If we have focused data but viewMode wasn't set to FOCUS, setting it here (useEffect would be better but this works for render)
-    // However, let's stick to the previous conditional logic which was implicitly "if focusedData exists"
-  }
+    // 2. Expand the target task (and its parents)
+    // The toggleTaskExpansion toggles, so we might need a distinct 'expandPath' function.
+    // simpler: just ensure it is expanded? toggleTaskExpansion toggles.
+    // actually, most parents are expanded by default or usage.
+    // for now, just exiting focus mode gets us to the tree.
+    // Scrolling to it would be the 'cherry on top', requires refs which we haven't set up yet.
+    // The user's main complaint was "starting from top", which was caused by unmount.
+    // By keeping MainStage mounted, scroll position is preserved.
+    // So if they clicked a child in the tree, they are *already* scrolled to it.
+    // If they click "Parent" in Focus Mode, they probably want to see the Parent.
+    // Since MainStage is preserved, the parent is likely visible or just above/below.
 
-  // Re-implementing the original render logic for Focus Mode to be safe, but using the new viewMode guard as primary if desired.
-  // The original code was: if (focusedData) { return <FocusMode ... /> }
-  // I will keep that behavior for compatibility, but Create View takes precedence.
-
-  if (focusedData) {
-    return (
-      <>
-        <FocusMode
-          task={focusedData.task}
-          parentTask={focusedData.parent}
-          project={activeProject}
-          onComplete={handleComplete}
-          onSplit={handleSplit}
-          onExit={handleExitFocus}
-          onAdvanceToNext={handleAdvanceToNext}
-          hasMoreTasks={hasMoreTasks}
-        />
-        <SplitModal task={splitTask} context={splitContext} isOpen={isModalOpen} onClose={handleCloseModal} onApply={handleApply} />
-      </>
-    )
-  }
+    // Ideally we ensure the parent is expanded. 
+    // We can iterate parents and set isExpanded=true.
+    // But for this step, let's just solve the "Overlay" part first as it solves the main annoyance.
+  }, [])
 
   return (
     <div className="flex h-screen">
@@ -559,6 +534,21 @@ export default function FractalFocus() {
         isOpen={isCompletedPanelOpen}
         onClose={() => setIsCompletedPanelOpen(false)}
       />
+
+      {/* FOCUS MODE OVERLAY */}
+      {focusedData && viewMode === 'FOCUS' && (
+        <FocusMode
+          task={focusedData.task}
+          parentTask={focusedData.parent}
+          project={activeProject}
+          onComplete={handleComplete}
+          onSplit={handleSplit}
+          onExit={handleExitFocus}
+          onAdvanceToNext={handleAdvanceToNext}
+          hasMoreTasks={hasMoreTasks}
+          onNavigateToTask={handleNavigateToTask}
+        />
+      )}
 
       {/* NEW TASK MODAL */}
       <TaskModal
