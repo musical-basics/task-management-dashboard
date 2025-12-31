@@ -12,6 +12,7 @@ interface MainStageProps {
   onAdd: (task: Task) => void
   onEdit: (task: Task) => void
   onDelete: (task: Task) => void // <--- NEW PROP
+  onEditProject: (newName: string) => void
 }
 
 function calculateTotalTime(task: Task): number {
@@ -19,9 +20,16 @@ function calculateTotalTime(task: Task): number {
   return task.children.reduce((sum, child) => sum + calculateTotalTime(child), 0)
 }
 
-export function MainStage({ tasks, onToggle, onSplit, onFocus, onAdd, onEdit, onDelete }: MainStageProps) {
+export function MainStage({ tasks, onToggle, onSplit, onFocus, onAdd, onEdit, onDelete, onEditProject }: MainStageProps) {
   const totalAccumulated = calculateTotalTime(tasks)
   const isOverBudget = totalAccumulated > tasks.estimate
+
+  const handleTitleClick = () => {
+    const newName = prompt("Rename Project:", tasks.title)
+    if (newName && newName.trim() !== "") {
+      onEditProject(newName.trim())
+    }
+  }
 
   return (
     <main className="flex-1 bg-gradient-to-br from-slate-900 to-[#0B1120] overflow-y-auto relative">
@@ -31,7 +39,29 @@ export function MainStage({ tasks, onToggle, onSplit, onFocus, onAdd, onEdit, on
         <header className="mb-8 group">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-slate-100 tracking-tight">{tasks.title}</h1>
+              <div className="flex items-center gap-3 group/title">
+                <h1 className="text-3xl font-bold text-slate-100 tracking-tight">{tasks.title}</h1>
+                <button
+                  onClick={handleTitleClick}
+                  className="opacity-0 group-hover/title:opacity-100 text-slate-500 hover:text-cyan-400 p-1 transition-opacity"
+                  title="Rename Project"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16" // Slightly bigger for header
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                    <path d="m15 5 4 4" />
+                  </svg>
+                </button>
+              </div>
               <div className="flex items-center gap-3 mt-3">
                 <span className="text-sm font-mono text-slate-500">Est: {tasks.estimate}m</span>
                 <span className="text-slate-600">|</span>

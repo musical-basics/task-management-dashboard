@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
-import type { Task, ProposedSubtask, CompletedTask, Project } from "@/lib/types"
+import type { Task, ProposedSubtask, CompletedTask, Project, Category } from "@/lib/types"
 import { buildContextString } from "@/lib/context-utils"
 import { initialTasks } from "@/lib/mock-data"
 // import { supabase } from "@/lib/supabaseClient" // Not needed in client anymore for projects
@@ -156,6 +156,7 @@ function buildTaskTree(flatTasks: any[], rootTitle: string): Task {
 
 export default function FractalFocus() {
   const [projects, setProjects] = useState<Project[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [tasks, setTasks] = useState<Task>({ id: "root", title: "Loading...", estimate: 0, depth: 0, children: [] })
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [splitTask, setSplitTask] = useState<Task | null>(null)
@@ -174,14 +175,23 @@ export default function FractalFocus() {
   // ------------------------------------
 
   useEffect(() => {
-    const fetchProjects = async () => {
+    const fetchProjectsAndCategories = async () => {
       try {
-        const res = await fetch('/api/projects')
-        const data = await res.json()
+        const [projectsRes, categoriesRes] = await Promise.all([
+          fetch('/api/projects'),
+          fetch('/api/categories')
+        ])
 
-        if (Array.isArray(data)) {
+        const projectsData = await projectsRes.json()
+        const categoriesData = await categoriesRes.json()
+
+        if (Array.isArray(categoriesData)) {
+          setCategories(categoriesData)
+        }
+
+        if (Array.isArray(projectsData)) {
           // Normalize IDs to strings to prevent type mismatch errors
-          const normalizedProjects = data.map((p: any) => ({ ...p, id: String(p.id) }))
+          const normalizedProjects = projectsData.map((p: any) => ({ ...p, id: String(p.id) }))
           setProjects(normalizedProjects)
 
           // Select the first project automatically if none selected
@@ -190,11 +200,11 @@ export default function FractalFocus() {
           }
         }
       } catch (error) {
-        console.error("Failed to fetch projects:", error)
+        console.error("Failed to fetch data:", error)
       }
     }
 
-    fetchProjects()
+    fetchProjectsAndCategories()
   }, []) // Empty dependency array = run once
 
   // 3. LISTEN for project changes to clear/load tasks
@@ -471,6 +481,83 @@ export default function FractalFocus() {
     }
   }, [])
 
+  const handleEditProject = useCallback(async (projectId: string, newName: string) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      })
+
+      if (res.ok) {
+        // Update local projects
+        setProjects(prev => prev.map(p =>
+          String(p.id) === projectId ? { ...p, name: newName } : p
+        ))
+
+        // If it's the active project, update the task tree root title
+        if (activeProjectId === projectId) {
+          setTasks(prev => ({ ...prev, title: newName }))
+        }
+      }
+    } catch (error) {
+      console.error("Failed to update project:", error)
+    }
+  }, [activeProjectId])
+
+  const handleNavigateToTask = useCallback((taskId: string) => {
+    // 1. Exit focus mode
+    setFocusedTaskId(null)
+    setViewMode('TREE')
+
+    // 2. Expand the target task (and its parents)
+    // The toggleTaskExpansion toggles, so we might need a distinct 'expandPath' function.
+    // simpler: just ensure it is expanded? toggleTaskExpansion toggles.
+    // actually, most parents are expanded by default or usage.
+    // for now, just exiting focus mode gets us to the tree.
+  }, [])
+
+  // NEW: Handle Drag and Drop
+  const handleBatchUpdate = useCallback(async (updates: { projects?: any[], categories?: any[] }) => {
+    // Optimistic update
+    if (updates.projects) {
+      setProjects(prev => {
+        const newProjects = [...prev]
+        updates.projects?.forEach(u => {
+          const index = newProjects.findIndex(p => String(p.id) === String(u.id))
+          if (index !== -1) {
+            newProjects[index] = { ...newProjects[index], ...u }
+          }
+        })
+        return newProjects
+      })
+    }
+
+    if (updates.categories) {
+      setCategories(prev => {
+        const newCategories = [...prev]
+        updates.categories?.forEach(u => {
+          const index = newCategories.findIndex(c => String(c.id) === String(u.id))
+          if (index !== -1) {
+            newCategories[index] = { ...newCategories[index], ...u }
+          }
+        })
+        return newCategories.sort((a, b) => a.sort_order - b.sort_order)
+      })
+    }
+
+    // API Call
+    try {
+      await fetch('/api/batch', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      })
+    } catch (error) {
+      console.error("Batch update failed:", error)
+    }
+  }, [])
+
   const hasMoreTasks = focusedTaskId ? findNextTask(tasks, focusedTaskId) !== null : false
 
   const focusedData = focusedTaskId ? findTaskWithParent(tasks, focusedTaskId) : null
@@ -485,26 +572,54 @@ export default function FractalFocus() {
     )
   }
 
-  const handleNavigateToTask = useCallback((taskId: string) => {
-    // 1. Exit focus mode
-    setFocusedTaskId(null)
-    setViewMode('TREE')
+  // NEW: Category Management Handlers
+  const handleAddCategory = useCallback(async () => {
+    const name = prompt("Enter new category name:")
+    if (!name || !name.trim()) return
 
-    // 2. Expand the target task (and its parents)
-    // The toggleTaskExpansion toggles, so we might need a distinct 'expandPath' function.
-    // simpler: just ensure it is expanded? toggleTaskExpansion toggles.
-    // actually, most parents are expanded by default or usage.
-    // for now, just exiting focus mode gets us to the tree.
-    // Scrolling to it would be the 'cherry on top', requires refs which we haven't set up yet.
-    // The user's main complaint was "starting from top", which was caused by unmount.
-    // By keeping MainStage mounted, scroll position is preserved.
-    // So if they clicked a child in the tree, they are *already* scrolled to it.
-    // If they click "Parent" in Focus Mode, they probably want to see the Parent.
-    // Since MainStage is preserved, the parent is likely visible or just above/below.
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), sort_order: categories.length })
+      })
+      const newCategory = await res.json()
+      if (res.ok) {
+        setCategories(prev => [...prev, newCategory])
+      }
+    } catch (error) {
+      console.error("Failed to add category:", error)
+    }
+  }, [categories.length])
 
-    // Ideally we ensure the parent is expanded. 
-    // We can iterate parents and set isExpanded=true.
-    // But for this step, let's just solve the "Overlay" part first as it solves the main annoyance.
+  const handleEditCategory = useCallback(async (id: string, newName: string) => {
+    // Optimistic Update
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c))
+
+    try {
+      await fetch(`/api/categories/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      })
+    } catch (error) {
+      console.error("Failed to update category name:", error)
+    }
+  }, [])
+
+  const handleDeleteCategory = useCallback(async (id: string) => {
+    // Optimistic Update
+    setCategories(prev => prev.filter(c => c.id !== id))
+    // Move projects to uncategorized (optimistic)
+    setProjects(prev => prev.map(p => p.category_id === id ? { ...p, category_id: undefined } : p))
+
+    try {
+      await fetch(`/api/categories/${id}`, {
+        method: 'DELETE'
+      })
+    } catch (error) {
+      console.error("Failed to delete category:", error)
+    }
   }, [])
 
   return (
@@ -518,6 +633,12 @@ export default function FractalFocus() {
         onNewProject={() => setViewMode('CREATE')}
         fastMode={fastDeleteMode}
         onToggleFastMode={() => setFastDeleteMode(prev => !prev)}
+        onEditProject={handleEditProject}
+        categories={categories}
+        onBatchUpdate={handleBatchUpdate}
+        onAddCategory={handleAddCategory}
+        onEditCategory={handleEditCategory}
+        onDeleteCategory={handleDeleteCategory}
       />
       <MainStage
         tasks={tasks}
@@ -527,6 +648,7 @@ export default function FractalFocus() {
         onAdd={handleManualAdd}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onEditProject={(newName) => activeProjectId && handleEditProject(activeProjectId, newName)}
       />
       <SplitModal task={splitTask} context={splitContext} isOpen={isModalOpen} onClose={handleCloseModal} onApply={handleApply} />
       <CompletedPanel
