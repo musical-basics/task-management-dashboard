@@ -262,6 +262,77 @@ export function Sidebar({
               </div>
             )}
           </Droppable>
+
+          {/* UNCATEGORIZED PROJECTS */}
+          {uncategorized.length > 0 && (
+            <div className="mt-6">
+              <div className="flex items-center justify-between mb-2 px-3">
+                <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-widest">
+                  Uncategorized
+                </h3>
+              </div>
+              <Droppable droppableId="uncategorized" type="PROJECT">
+                {(provided) => (
+                  <ul
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="space-y-0.5 min-h-[10px]"
+                  >
+                    {uncategorized.map((project, index) => (
+                      <Draggable key={project.id} draggableId={project.id} index={index}>
+                        {(provided, snapshot) => (
+                          <li
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className="group relative"
+                          >
+                            <div
+                              onClick={() => onProjectSelect(project.id)}
+                              className={cn(
+                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all text-left pr-8 cursor-pointer select-none",
+                                activeProjectId === project.id
+                                  ? "bg-gradient-to-r from-cyan-500/10 to-transparent border-l-2 border-cyan-400 text-slate-100"
+                                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
+                                snapshot.isDragging && "bg-slate-800 shadow-lg ring-1 ring-white/10 opacity-90 z-50"
+                              )}
+                            >
+                              <span className="text-base min-w-[20px]">{project.emoji}</span>
+                              <span className="font-medium truncate flex-1">{project.name}</span>
+                            </div>
+
+                            {/* Project Actions */}
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity z-10 gap-1">
+                              <button
+                                onClick={(e) => handleEditProjectClick(e, project)}
+                                className="p-1 text-slate-500 hover:text-cyan-400"
+                                title="Rename Project"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (onDeleteProject && confirm(`Delete project "${project.name}" and all its tasks?`)) {
+                                    onDeleteProject(project.id)
+                                  }
+                                }}
+                                className="p-1 text-slate-500 hover:text-red-400"
+                                title="Delete Project"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </li>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </ul>
+                )}
+              </Droppable>
+            </div>
+          )}
         </nav>
 
         {/* BOTTOM ACTIONS */}
